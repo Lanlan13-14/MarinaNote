@@ -2,19 +2,23 @@
 Simple and lightweight notes
 Project Structure
 ```
-MarinaNote/
+marinanote/
+├─ .github/
+│  └─ workflows/
+│     └─ build-and-push.yml
 ├─ Dockerfile
 ├─ docker-compose.yml
-├─ .env
+├─ LICENSE
+├─ README.md
 ├─ server/
 │  ├─ package.json
 │  └─ index.js
-├─ public/
-│  ├─ login.html        # 镜像内：登录页（和截图一致）
-│  ├─ notes.html        # 镜像内：备注页（内置，可编辑）
-│  ├─ admin.html        # 镜像内：管理界面（登录后使用）
-│  ├─ assets/
-│  │  ├─ style.css
-│  │  └─ app.js
-│  └─ uploads/          # 挂载卷：用户上传的首页与节点 HTML 存放处（宿主卷）
+└─ public/
+   ├─ login.html
+   ├─ admin.html
+   ├─ notes.html
+   ├─ assets/
+   │  ├─ style.css
+   │  └─ app.js
+   └─ uploads/   # 宿主卷挂载点（运行时创建）
 ```
