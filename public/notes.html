@@ -1,0 +1,33 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>备注 - MarinaNote</title>
+<link rel="stylesheet" href="/assets/style.css">
+</head>
+<body>
+<div class="container">
+  <div class="header">
+    <div class="logo">✎</div>
+    <div>
+      <div class="title">备注</div>
+      <div class="small">MarinaNote</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div id="content">加载中...</div>
+  </div>
+</div>
+
+<script>
+async function loadNotes(){
+  const r = await fetch('/api/notes-content');
+  const j = await r.json();
+  document.getElementById('content').innerHTML = j.content || '<p class="small-muted">暂无备注</p>';
+}
+loadNotes();
+</script>
+</body>
+</html>
