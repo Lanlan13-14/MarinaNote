@@ -2,7 +2,7 @@
 Simple and lightweight notes
 Project Structure
 ```
-pudding-ui/
+MarinaNote/
 ├─ Dockerfile
 ├─ docker-compose.yml
 ├─ .env
