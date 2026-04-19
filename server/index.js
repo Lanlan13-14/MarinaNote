@@ -12,28 +12,27 @@ const requiredEnv = ['ADMIN_USER','ADMIN_PASS','ADMIN_PATH','NOTES_PATH','SESSIO
 const missing = requiredEnv.filter(k => !process.env[k]);
 if (missing.length) {
   console.error('Missing required environment variables:', missing.join(', '));
-  console.error('MarinaNote will exit. Provide these env vars at container runtime.');
   process.exit(1);
 }
 
-// If AUTH_MODE requires secrets, ensure they exist
-const authMode = (process.env.AUTH_MODE || 'none').toLowerCase();
-if (authMode === 'hcaptcha' && !process.env.HCAPTCHA_SECRET) {
+const AUTH_MODE = (process.env.AUTH_MODE || 'none').toLowerCase();
+if (AUTH_MODE === 'hcaptcha' && !process.env.HCAPTCHA_SECRET) {
   console.error('AUTH_MODE=hcaptcha requires HCAPTCHA_SECRET env var.');
   process.exit(1);
 }
-if (authMode === 'cf' && !process.env.CF_TURNSTILE_SECRET) {
+if (AUTH_MODE === 'cf' && !process.env.CF_TURNSTILE_SECRET) {
   console.error('AUTH_MODE=cf requires CF_TURNSTILE_SECRET env var.');
   process.exit(1);
 }
-if (authMode === 'f2a' && !process.env.F2A_SECRET) {
+if (AUTH_MODE === 'f2a' && !process.env.F2A_SECRET) {
   console.error('AUTH_MODE=f2a requires F2A_SECRET env var.');
   process.exit(1);
 }
 
 const PORT = parseInt(process.env.PORT, 10);
 const MAX_MB = parseInt(process.env.MAX_UPLOAD_MB || '2', 10);
-const uploadDir = path.join(__dirname, '..', 'public', 'uploads');
+const publicDir = path.join(__dirname, '..', 'public');
+const uploadDir = path.join(publicDir, 'uploads');
 if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
 
 const app = express();
@@ -47,10 +46,7 @@ app.use(session({
   cookie: { secure: false } // production: set true behind TLS
 }));
 
-// Serve static files (login/admin/notes + assets). uploads is mounted from host.
-app.use(express.static(path.join(__dirname, '..', 'public')));
-
-// Multer config: only allow .html
+// Multer config
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, uploadDir),
   filename: (req, file, cb) => {
@@ -67,13 +63,27 @@ const upload = multer({
   }
 });
 
-// Auth middleware
-function requireAuth(req, res, next){
-  if (req.session && req.session.authed) return next();
-  res.status(401).json({ error: 'Unauthorized' });
+// Helper: is API
+function isApiRequest(req) {
+  return req.path.startsWith('/api/');
 }
 
-// Helper: verify hCaptcha token
+// Auth middleware
+function requireAuth(req, res, next) {
+  if (req.session && req.session.authed) return next();
+  if (isApiRequest(req)) return res.status(401).json({ error: 'Unauthorized' });
+  return res.redirect('/login');
+}
+
+// Serve assets publicly
+app.use('/assets', express.static(path.join(publicDir, 'assets')));
+
+// Serve login page at /login (public)
+app.get('/login', (req, res) => {
+  res.sendFile(path.join(publicDir, 'login.html'));
+});
+
+// API: login (public)
 async function verifyHcaptcha(token) {
   const secret = process.env.HCAPTCHA_SECRET;
   if (!secret) return false;
@@ -85,13 +95,8 @@ async function verifyHcaptcha(token) {
     });
     const j = await resp.json();
     return !!j.success;
-  } catch (e) {
-    console.error('hCaptcha verify error', e);
-    return false;
-  }
+  } catch (e) { console.error(e); return false; }
 }
-
-// Helper: verify Cloudflare Turnstile token
 async function verifyTurnstile(token) {
   const secret = process.env.CF_TURNSTILE_SECRET;
   if (!secret) return false;
@@ -103,32 +108,24 @@ async function verifyTurnstile(token) {
     });
     const j = await resp.json();
     return !!j.success;
-  } catch (e) {
-    console.error('Turnstile verify error', e);
-    return false;
-  }
+  } catch (e) { console.error(e); return false; }
 }
 
-// Login endpoint
 app.post('/api/login', async (req, res) => {
   const { user, pass, token, f2a } = req.body || {};
   if (!user || !pass) return res.status(400).json({ error: 'Missing credentials' });
-
   if (user !== process.env.ADMIN_USER || pass !== process.env.ADMIN_PASS) {
     return res.status(401).json({ error: 'Invalid credentials' });
   }
-
-  const mode = (process.env.AUTH_MODE || 'none').toLowerCase();
-
-  if (mode === 'hcaptcha') {
+  if (AUTH_MODE === 'hcaptcha') {
     if (!token) return res.status(401).json({ error: 'Missing captcha token' });
     const ok = await verifyHcaptcha(token);
     if (!ok) return res.status(401).json({ error: 'Captcha verification failed' });
-  } else if (mode === 'cf') {
+  } else if (AUTH_MODE === 'cf') {
     if (!token) return res.status(401).json({ error: 'Missing turnstile token' });
     const ok = await verifyTurnstile(token);
     if (!ok) return res.status(401).json({ error: 'Turnstile verification failed' });
-  } else if (mode === 'f2a') {
+  } else if (AUTH_MODE === 'f2a') {
     if (!f2a) return res.status(401).json({ error: 'Missing 2FA token' });
     const verified = speakeasy.totp.verify({
       secret: process.env.F2A_SECRET,
@@ -138,18 +135,16 @@ app.post('/api/login', async (req, res) => {
     });
     if (!verified) return res.status(401).json({ error: 'Invalid 2FA token' });
   }
-
   req.session.authed = true;
-  res.json({ ok: true, redirect: process.env.ADMIN_PATH });
+  res.json({ ok: true, redirect: process.env.ADMIN_PATH || '/admin' });
 });
 
-// Logout
 app.post('/api/logout', (req, res) => {
   req.session.destroy(()=>res.json({ ok:true }));
 });
 
-// Public config endpoint (frontend reads)
-app.get('/api/config', (req, res) => {
+// Protected config endpoint
+app.get('/api/config', requireAuth, (req, res) => {
   res.json({
     site_name: process.env.SITE_NAME || 'MarinaNote',
     notes_path: process.env.NOTES_PATH,
@@ -160,49 +155,66 @@ app.get('/api/config', (req, res) => {
   });
 });
 
-// Upload HTML (protected)
+// Upload (protected)
 app.post('/api/upload', requireAuth, upload.single('file'), (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file' });
-  const url = `/uploads/${req.file.filename}`;
-  res.json({ url });
+  res.json({ url: `/uploads/${req.file.filename}` });
 });
 
-// Save site config (protected)
+// Save config (protected)
 app.post('/api/save-config', requireAuth, (req, res) => {
-  const cfgPath = path.join(uploadDir, 'site-config.json');
-  fs.writeFileSync(cfgPath, JSON.stringify(req.body || {}, null, 2));
+  fs.writeFileSync(path.join(uploadDir, 'site-config.json'), JSON.stringify(req.body || {}, null, 2));
   res.json({ ok:true });
 });
-
-// Read saved site config
-app.get('/api/site-config', (req, res) => {
+app.get('/api/site-config', requireAuth, (req, res) => {
   const cfgPath = path.join(uploadDir, 'site-config.json');
-  if (fs.existsSync(cfgPath)) {
-    return res.json(JSON.parse(fs.readFileSync(cfgPath,'utf8')));
-  }
+  if (fs.existsSync(cfgPath)) return res.json(JSON.parse(fs.readFileSync(cfgPath,'utf8')));
   res.json({});
 });
 
-// Save notes (protected)
+// Notes (protected)
 app.post('/api/save-notes', requireAuth, (req, res) => {
-  const notesFile = path.join(uploadDir, 'notes-content.json');
-  fs.writeFileSync(notesFile, JSON.stringify({ content: req.body.content || '' }, null, 2));
+  fs.writeFileSync(path.join(uploadDir, 'notes-content.json'), JSON.stringify({ content: req.body.content || '' }, null, 2));
   res.json({ ok:true });
 });
-
-// Read notes (public)
-app.get('/api/notes-content', (req, res) => {
+app.get('/api/notes-content', requireAuth, (req, res) => {
   const notesFile = path.join(uploadDir, 'notes-content.json');
-  if (fs.existsSync(notesFile)) {
-    return res.json(JSON.parse(fs.readFileSync(notesFile,'utf8')));
-  }
+  if (fs.existsSync(notesFile)) return res.json(JSON.parse(fs.readFileSync(notesFile,'utf8')));
   res.json({ content: '' });
+});
+
+// Serve uploads via protected route
+app.get('/uploads/:file', requireAuth, (req, res) => {
+  const file = req.params.file;
+  const filePath = path.join(uploadDir, file);
+  if (!filePath.startsWith(uploadDir)) return res.status(400).send('Invalid file');
+  if (!fs.existsSync(filePath)) return res.status(404).send('Not found');
+  res.sendFile(filePath);
+});
+
+// Serve admin and notes pages at /admin and /notes (protected)
+app.get('/admin', requireAuth, (req, res) => {
+  res.sendFile(path.join(publicDir, 'admin.html'));
+});
+app.get('/notes', requireAuth, (req, res) => {
+  res.sendFile(path.join(publicDir, 'notes.html'));
+});
+
+// Root redirect to login or admin if authed
+app.get('/', (req, res) => {
+  if (req.session && req.session.authed) return res.redirect(process.env.ADMIN_PATH || '/admin');
+  return res.redirect('/login');
 });
 
 // Security header
 app.use((req, res, next) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
   next();
+});
+
+// Fallback: 404
+app.use((req, res) => {
+  res.status(404).send('Not found');
 });
 
 app.listen(PORT, ()=>console.log(`MarinaNote listening on ${PORT}`));
