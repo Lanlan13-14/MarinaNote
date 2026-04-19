@@ -1,0 +1,36 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Andy' Note Book - 登录</title>
+<link rel="stylesheet" href="/assets/style.css">
+</head>
+<body>
+<div class="login-wrap">
+  <div class="login-card">
+    <h2 class="site-name">Andy' Note Book</h2>
+    <p class="small">Personal knowledge base</p>
+
+    <label>Username</label>
+    <input id="user" type="text" autocomplete="username">
+
+    <label>Password</label>
+    <input id="pass" type="password" autocomplete="current-password">
+
+    <div style="display:flex; align-items:center; gap:8px; margin-top:8px">
+      <input id="real" type="checkbox">
+      <label for="real">我是真实访客</label>
+    </div>
+
+    <div id="captchaContainer" style="margin-top:12px"></div>
+
+    <button id="loginBtn" class="btn" style="width:100%; margin-top:14px">Continue</button>
+
+    <div id="loader" class="loader" style="display:none; margin-top:12px"></div>
+  </div>
+</div>
+
+<script src="/assets/app.js"></script>
+</body>
+</html>
