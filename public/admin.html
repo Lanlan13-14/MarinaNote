@@ -1,0 +1,93 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MarinaNote 管理</title>
+<link rel="stylesheet" href="/assets/style.css">
+</head>
+<body>
+<div class="bg-orb"></div>
+<div class="container">
+  <div class="header">
+    <div class="logo">M</div>
+    <div>
+      <div class="title site-name">MarinaNote</div>
+      <div class="small">管理面板</div>
+    </div>
+  </div>
+
+  <div class="admin-grid">
+    <div>
+      <div class="card">
+        <h4>站点设置</h4>
+        <div class="field">
+          <label>左上角名称</label>
+          <input id="siteName" type="text" placeholder="站点名称">
+        </div>
+        <div class="field">
+          <label>备注页面路径</label>
+          <input id="notesPath" type="text" placeholder="/notes">
+        </div>
+        <div style="margin-top:10px">
+          <button id="saveConfig" class="btn">保存设置</button>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:12px">
+        <h4>上传首页或节点 HTML</h4>
+        <form id="uploadForm">
+          <label>选择 HTML 文件</label>
+          <input id="fileInput" type="file" accept=".html">
+          <div style="margin-top:10px">
+            <button class="btn" type="submit">上传并预览</button>
+          </div>
+          <div class="small-muted">上传后会生成 /uploads/xxx.html，可公开访问</div>
+        </form>
+      </div>
+
+      <div class="card" style="margin-top:12px">
+        <h4>备注编辑</h4>
+        <label>备注内容</label>
+        <textarea id="notesEditor" style="width:100%; min-height:160px; padding:10px; border-radius:8px; background:transparent; color:inherit"></textarea>
+        <div style="margin-top:8px">
+          <button id="saveNotes" class="btn">保存备注</button>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="card">
+        <h4>上传预览</h4>
+        <iframe id="previewFrame" class="preview" sandbox="allow-same-origin" style="display:none"></iframe>
+        <div class="small-muted" style="margin-top:8px">预览使用 iframe sandbox 隔离</div>
+      </div>
+
+      <div class="card" style="margin-top:12px">
+        <h4>操作</h4>
+        <div style="display:flex; gap:8px; margin-top:8px">
+          <button class="copy" onclick="fetch('/api/logout',{method:'POST'}).then(()=>location.href='/login.html')">登出</button>
+          <button class="copy" onclick="location.href='/'">前往首页</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  async function initAdmin(){
+    const r = await fetch('/api/config');
+    const cfg = await r.json();
+    document.getElementById('siteName').value = cfg.site_name || '';
+    document.getElementById('notesPath').value = cfg.notes_path || '/notes';
+    const r2 = await fetch('/api/site-config');
+    const sc = await r2.json();
+    if (sc.site_name) document.getElementById('siteName').value = sc.site_name;
+    if (sc.notes_path) document.getElementById('notesPath').value = sc.notes_path;
+  }
+  initAdmin();
+</script>
+
+<script src="/assets/app.js"></script>
+</body>
+</html>
